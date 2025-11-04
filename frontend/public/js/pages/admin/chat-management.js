@@ -1,5 +1,15 @@
 // Admin Chat Management
 (async function () {
+  const helpers = (window.dhAdminDashboard && window.dhAdminDashboard.helpers) || {};
+  const showAlert = (typeof helpers.showDialogAlert === 'function')
+    ? helpers.showDialogAlert
+    : (message, options)=> {
+        if (typeof window !== 'undefined' && window.alert) window.alert(message);
+        return Promise.resolve();
+      };
+  const showConfirm = (typeof helpers.showDialogConfirm === 'function')
+    ? helpers.showDialogConfirm
+    : (message)=> Promise.resolve(window.confirm(message));
   const el = (sel) => document.querySelector(sel);
   const evSelect = el('#event-select');
   const btnRefresh = el('#btn-refresh-events');
@@ -78,7 +88,7 @@
   async function viewGroupMessages(groupId, group) {
     try {
       const { res: r1, data: g } = await window.dh.apiGet(`/admin/chats/groups/${encodeURIComponent(groupId)}`);
-      if (!r1.ok) return alert('Failed to fetch group');
+  if (!r1.ok) return showAlert('Failed to fetch group', { tone: 'danger', title: 'Chat group' });
       const { res, data: msgs } = await window.dh.apiGet(`/admin/chats/groups/${encodeURIComponent(groupId)}/messages`);
       let out = `Group ${groupId}\nSection: ${g.section_ref || group.section_ref}\nParticipants: ${(g.participant_emails || group.participant_emails || []).join(', ')}\n\nMessages:\n`;
       if (res.ok && Array.isArray(msgs)) {
@@ -86,24 +96,24 @@
       } else {
         out += 'No messages';
       }
-      alert(out);
+  await showAlert(out, { title: `Group ${groupId}`, tone: 'info' });
     } catch (err) {
       console.error(err);
-      alert('Error fetching messages');
+  await showAlert('Error fetching messages', { tone: 'danger', title: 'Chat group' });
     }
   }
 
   async function createChatForEvent() {
     const eventId = evSelect.value;
-    if (!eventId) return alert('Select event');
+  if (!eventId) { await showAlert('Select an event first.', { tone: 'warning', title: 'Action required' }); return; }
     try {
       // call admin endpoint to seed chat groups for that event
       const { res, data } = await window.dh.apiPost(`/admin/chats/seed?event_id=${encodeURIComponent(eventId)}`, {});
       if (!res.ok) {
-        alert('Failed to create chats');
+        await showAlert('Failed to create chats', { tone: 'danger', title: 'Chat groups' });
         return;
       }
-      alert('Created chats');
+      await showAlert('Chats created successfully.', { tone: 'success', title: 'Chat groups' });
       loadGroupsForSelectedEvent();
     } catch (err) {
       console.error(err);
@@ -112,12 +122,18 @@
 
   async function clearChatsForEvent() {
     const eventId = evSelect.value;
-    if (!eventId) return alert('Select event');
-    if (!confirm('Clear (delete) all chat groups for this event?')) return;
+    if (!eventId) { await showAlert('Select an event first.', { tone: 'warning', title: 'Action required' }); return; }
+    const confirmClear = await showConfirm('Clear (delete) all chat groups for this event?', {
+      title: 'Clear chats',
+      confirmLabel: 'Delete all',
+      tone: 'danger',
+      destructive: true,
+    });
+    if (!confirmClear) return;
     try {
-      const { res, data } = await window.dh.apiPost(`/admin/chats/clear?event_id=${encodeURIComponent(eventId)}`, {});
-      if (!res.ok) return alert('Failed to clear chats');
-      alert('Cleared chats');
+  const { res, data } = await window.dh.apiPost(`/admin/chats/clear?event_id=${encodeURIComponent(eventId)}`, {});
+  if (!res.ok) return showAlert('Failed to clear chats', { tone: 'danger', title: 'Chat groups' });
+  await showAlert('Chats cleared for the selected event.', { tone: 'success', title: 'Chat groups' });
       loadGroupsForSelectedEvent();
     } catch (err) {
       console.error(err);
@@ -126,12 +142,18 @@
 
   async function deleteGroup(groupId) {
     if (!groupId) groupId = manualGroupId.value;
-    if (!groupId) return alert('No group id');
-    if (!confirm('Delete group ' + groupId + '?')) return;
+    if (!groupId) { await showAlert('No group id provided.', { tone: 'warning', title: 'Chat groups' }); return; }
+    const confirmDelete = await showConfirm('Delete group ' + groupId + '?', {
+      title: 'Delete group',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+      destructive: true,
+    });
+    if (!confirmDelete) return;
     try {
       const { res } = await window.dh.apiDelete(`/admin/chats/groups/${encodeURIComponent(groupId)}`);
-      if (!res.ok) return alert('Failed to delete');
-      alert('Deleted');
+  if (!res.ok) return showAlert('Failed to delete group.', { tone: 'danger', title: 'Chat groups' });
+  await showAlert('Group deleted successfully.', { tone: 'success', title: 'Chat groups' });
       loadGroupsForSelectedEvent();
     } catch (err) {
       console.error(err);
@@ -141,7 +163,7 @@
   async function postMessageToGroup() {
     const gid = postGroupId.value;
     const body = postMessage.value;
-    if (!gid || !body) return alert('group id and body required');
+  if (!gid || !body) { await showAlert('Group id and message body are required.', { tone: 'warning', title: 'Chat groups' }); return; }
     try {
       const { res } = await window.dh.apiPost(`/admin/chats/groups/${encodeURIComponent(gid)}/messages`, { body });
       if (!res.ok) return postStatus.textContent = 'Failed to post';

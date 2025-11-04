@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Body
 from .. import db as db_mod
 from ..auth import require_admin
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Set
 import datetime
 from bson.objectid import ObjectId
 
@@ -10,6 +10,41 @@ from .. import utils
 from ..utils import finalize_registration_payment
 
 router = APIRouter()
+
+
+def _normalize_email_for_match(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    email = str(value).strip().lower()
+    return email or None
+
+
+def _canonical_email(value: Optional[str]) -> Optional[str]:
+    base = _normalize_email_for_match(value)
+    if not base or '@' not in base:
+        return base
+    local, domain = base.split('@', 1)
+    if '+' in local:
+        local = local.split('+', 1)[0]
+    return f"{local}@{domain}" if local else base
+
+
+def _parse_pair_emails(payload: str) -> List[str]:
+    if not payload:
+        return []
+    segments = payload.split('+')
+    emails: List[str] = []
+    current = ''
+    for part in segments:
+        current = f"{current}+{part}" if current else part
+        if '@' in part:
+            trimmed = current.strip()
+            if trimmed:
+                emails.append(trimmed)
+            current = ''
+    if current.strip():
+        emails.append(current.strip())
+    return emails
 
 @router.post('/match')
 async def run_match(_=Depends(require_admin)):
@@ -710,6 +745,293 @@ async def admin_send_incomplete_team_reminders(event_id: str, _=Depends(require_
         'emails_sent': emails_sent,
         'errors': errors
     }
+
+
+@router.post('/teams/create-from-synthetic')
+async def admin_create_team_from_synthetic(
+    event_id: str,
+    synthetic_id: str,
+    force: bool = False,
+    payload: Optional[dict] = Body(default=None),
+    _=Depends(require_admin),
+):
+    """Create a persistent `teams` document from a synthetic unit id (pair:... or split:...).
+
+    - When `force` is False (default), only registrations without an existing `team_id` are attached.
+    - When `force` is True, matching registrations are detached from their previous team before being reassigned.
+    - Returns the created team id, how many registrations were attached, and which teams lost members.
+    """
+    try:
+        eid = ObjectId(event_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid event_id')
+
+    if not synthetic_id or not (synthetic_id.startswith('pair:') or synthetic_id.startswith('split:')):
+        raise HTTPException(status_code=400, detail='synthetic_id must start with "pair:" or "split:"')
+
+    component_ids_raw: List[str] = []
+    if isinstance(payload, dict):
+        raw_components = payload.get('component_ids')
+        if isinstance(raw_components, list):
+            component_ids_raw = [str(item) for item in raw_components if isinstance(item, (str, int))]
+
+    seen_components: Set[str] = set()
+    component_ids: List[str] = []
+    for cid in component_ids_raw:
+        if cid not in seen_components:
+            seen_components.add(cid)
+            component_ids.append(cid)
+
+    if synthetic_id.startswith('pair:'):
+        email_payload = synthetic_id[len('pair:'):]
+        emails = _parse_pair_emails(email_payload)
+    else:
+        email_payload = synthetic_id[len('split:'):]
+        emails = [email_payload] if email_payload else []
+
+    if not emails and not component_ids:
+        raise HTTPException(status_code=400, detail='No participant reference could be derived from synthetic_id')
+
+    regs: List[dict] = []
+    reg_ids_seen: Set[ObjectId] = set()
+
+    def remember_reg(doc: Optional[dict]) -> None:
+        if not doc:
+            return
+        rid = doc.get('_id')
+        if not rid or rid in reg_ids_seen:
+            return
+        reg_ids_seen.add(rid)
+        regs.append(doc)
+
+    component_team_ids: Set[ObjectId] = set()
+    for cid in component_ids:
+        if cid.startswith('solo:'):
+            raw = cid.split(':', 1)[1] if ':' in cid else ''
+            try:
+                reg_oid = ObjectId(raw)
+            except Exception:
+                continue
+            reg_doc = await db_mod.db.registrations.find_one({'_id': reg_oid, 'event_id': eid})
+            remember_reg(reg_doc)
+        else:
+            try:
+                team_oid = ObjectId(cid)
+            except Exception:
+                continue
+            component_team_ids.add(team_oid)
+
+    if component_team_ids:
+        async for reg_doc in db_mod.db.registrations.find({'event_id': eid, 'team_id': {'$in': list(component_team_ids)}}):
+            remember_reg(reg_doc)
+
+    target_email_lower: Set[str] = set()
+    target_email_canon: Set[str] = set()
+
+    def register_target_email(value: Optional[str]) -> None:
+        normalized = _normalize_email_for_match(value)
+        if not normalized:
+            return
+        target_email_lower.add(normalized)
+        canonical = _canonical_email(normalized)
+        if canonical:
+            target_email_canon.add(canonical)
+
+    for email in emails:
+        register_target_email(email)
+    for reg_doc in regs:
+        register_target_email(reg_doc.get('user_email_snapshot'))
+        register_target_email(reg_doc.get('user_email'))
+
+    async for reg_doc in db_mod.db.registrations.find({'event_id': eid}):
+        rid = reg_doc.get('_id')
+        if rid in reg_ids_seen:
+            continue
+        emails_to_check = [reg_doc.get('user_email_snapshot'), reg_doc.get('user_email')]
+        match_found = False
+        for candidate in emails_to_check:
+            normalized = _normalize_email_for_match(candidate)
+            if not normalized:
+                continue
+            canonical = _canonical_email(normalized)
+            if normalized in target_email_lower or (canonical and canonical in target_email_canon):
+                match_found = True
+                break
+            if any(target in normalized or normalized in target for target in target_email_lower):
+                match_found = True
+                break
+        if match_found:
+            remember_reg(reg_doc)
+
+    if not regs:
+        raise HTTPException(status_code=404, detail='No matching solo registrations found for synthetic id')
+
+    members: List[dict] = []
+    reg_ids_to_update: List[ObjectId] = []
+    blocking_regs: List[dict] = []
+    takeover_targets: Dict[ObjectId, List[dict]] = {}
+
+    for reg_doc in regs:
+        existing_tid = reg_doc.get('team_id')
+        if existing_tid:
+            if not force:
+                blocking_regs.append(reg_doc)
+                continue
+            takeover_targets.setdefault(existing_tid, []).append(reg_doc)
+        members.append({
+            'type': 'user',
+            'user_id': reg_doc.get('user_id'),
+            'email': reg_doc.get('user_email_snapshot') or reg_doc.get('user_email')
+        })
+        reg_ids_to_update.append(reg_doc.get('_id'))
+
+    if not members:
+        if blocking_regs:
+            raise HTTPException(status_code=400, detail='All matching registrations already belong to a team')
+        raise HTTPException(status_code=400, detail='All matching registrations already belong to a team')
+
+    now = datetime.datetime.utcnow()
+    team_doc = {
+        'event_id': eid,
+        'created_by_user_id': None,
+        'status': 'pending',
+        'members': members,
+        'cooking_location': None,
+        'course_preference': None,
+        'team_diet': None,
+        'created_at': now,
+        'origin': {'type': 'synthetic', 'synthetic_id': synthetic_id}
+    }
+    inserted = await db_mod.db.teams.insert_one(team_doc)
+    team_id = inserted.inserted_id if inserted else None
+    updated = 0
+    if team_id and reg_ids_to_update:
+        try:
+            mr = await db_mod.db.registrations.update_many({'_id': {'$in': reg_ids_to_update}}, {'$set': {'team_id': team_id}})
+            updated = getattr(mr, 'modified_count', 0) or getattr(mr, 'matched_count', 0) or 0
+        except Exception:
+            updated = 0
+
+    detached_from: List[dict] = []
+    if force and takeover_targets:
+        for prev_tid, reg_list in takeover_targets.items():
+            try:
+                prev_oid = prev_tid if isinstance(prev_tid, ObjectId) else ObjectId(str(prev_tid))
+            except Exception:
+                continue
+            try:
+                team = await db_mod.db.teams.find_one({'_id': prev_oid})
+            except Exception:
+                team = None
+            if not team:
+                continue
+            members_before = list(team.get('members') or [])
+            if not members_before:
+                continue
+            removal_keys = []
+            for reg_doc in reg_list:
+                email = (reg_doc.get('user_email_snapshot') or reg_doc.get('user_email') or '').strip().lower()
+                uid = reg_doc.get('user_id')
+                removal_keys.append((email, str(uid) if uid is not None else None))
+            members_after = []
+            removed_count = 0
+            for member in members_before:
+                mem_email = (member.get('email') or '').strip().lower()
+                mem_uid = member.get('user_id')
+                key = (mem_email, str(mem_uid) if mem_uid is not None else None)
+                match = False
+                if key in removal_keys:
+                    match = True
+                elif mem_email:
+                    for email_key, _ in removal_keys:
+                        if email_key and mem_email == email_key:
+                            match = True
+                            break
+                if match:
+                    removed_count += 1
+                    continue
+                members_after.append(member)
+            if removed_count:
+                entry: Dict[str, Any] = {'team_id': str(prev_oid), 'detached_members': removed_count}
+                try:
+                    if members_after:
+                        update_fields: Dict[str, Any] = {'members': members_after, 'updated_at': datetime.datetime.utcnow()}
+                        await db_mod.db.teams.update_one({'_id': prev_oid}, {'$set': update_fields})
+                    else:
+                        await db_mod.db.teams.delete_one({'_id': prev_oid})
+                        entry['team_deleted'] = True
+                    detached_from.append(entry)
+                except Exception:
+                    pass
+
+    return {
+        'status': 'created',
+        'team_id': str(team_id) if team_id else None,
+        'members_attached': updated,
+        'detached_from': detached_from,
+    }
+
+
+@router.post('/teams/{synthetic_id}/split')
+async def admin_split_synthetic_team(synthetic_id: str, event_id: str, _=Depends(require_admin)):
+    """Split a synthetic pair into separate single-member persistent teams.
+
+    - For a `pair:...` synthetic id will create one team per underlying participant (single-member teams)
+    - Updates only registrations without an existing team_id.
+    """
+    try:
+        eid = ObjectId(event_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid event_id')
+
+    if not synthetic_id or not synthetic_id.startswith('pair:'):
+        raise HTTPException(status_code=400, detail='Only pair: synthetic ids are supported for split')
+
+    payload = synthetic_id[len('pair:'):]
+    emails = [p for p in payload.split('+') if p]
+    if not emails:
+        raise HTTPException(status_code=400, detail='No participant emails derived from synthetic id')
+
+    created_team_ids = []
+    attached_count = 0
+
+    lower_emails = [e.lower() for e in emails]
+    async for r in db_mod.db.registrations.find({'event_id': eid}):
+        em = (r.get('user_email_snapshot') or r.get('user_email') or '').lower()
+        if not em: continue
+        match = any(le in em or em in le for le in lower_emails)
+        if not match: continue
+        if r.get('team_id'):
+            # skip existing
+            continue
+        # create single-member team
+        member = {'type': 'user', 'user_id': r.get('user_id'), 'email': r.get('user_email_snapshot') or r.get('user_email')}
+        now = datetime.datetime.utcnow()
+        team_doc = {
+            'event_id': eid,
+            'created_by_user_id': None,
+            'status': 'pending',
+            'members': [member],
+            'cooking_location': None,
+            'course_preference': None,
+            'team_diet': None,
+            'created_at': now,
+            'origin': {'type': 'synthetic_split', 'synthetic_id': synthetic_id}
+        }
+        inserted = await db_mod.db.teams.insert_one(team_doc)
+        tid = inserted.inserted_id if inserted else None
+        if tid:
+            created_team_ids.append(str(tid))
+            try:
+                await db_mod.db.registrations.update_one({'_id': r.get('_id')}, {'$set': {'team_id': tid}})
+                attached_count += 1
+            except Exception:
+                pass
+
+    if not created_team_ids:
+        raise HTTPException(status_code=404, detail='No eligible solo registrations found to split')
+
+    return {'status': 'split_completed', 'created_team_ids': created_team_ids, 'registrations_attached': attached_count}
 
 
 @router.post('/events/{event_id}/release-plans')

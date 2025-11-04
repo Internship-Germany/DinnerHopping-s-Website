@@ -29,7 +29,7 @@
       default: return 'ℹ';
     }
   }
-  function showToast(message, { type='info', duration=2500 }={}){
+  function showToast(message, { type='info', duration=10000 }={}){
     const c = ensureContainer();
     const box = document.createElement('div');
     box.className = `${colorBy(type)} text-white text-sm shadow-lg rounded-lg px-3 py-2 flex items-center gap-2 pointer-events-auto`;

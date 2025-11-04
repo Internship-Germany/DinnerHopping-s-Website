@@ -35,6 +35,109 @@
     .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #f46f47; border-radius: 50%; width: 18px; height: 18px; animation: spin 1s linear infinite; display: inline-block; }
     @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
     .leaflet-container { background: #f9fafb; }
+    .matching-highlight {
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+      background-color: rgba(237, 242, 254, 0.7);
+    }
+    .matching-flash {
+      animation: matchingFlash 1.6s ease-out;
+    }
+    @keyframes matchingFlash {
+      0% { background-color: rgba(59, 130, 246, 0.25); }
+      100% { background-color: transparent; }
+    }
+    
+    /* Floating panels for unplaced teams */
+    .phase-section {
+      position: relative;
+      margin-bottom: 24px;
+    }
+    
+    .floating-panel {
+      position: fixed;
+      right: 20px;
+      width: 280px;
+      max-height: 500px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+      z-index: 100;
+      transition: top 0.2s ease, opacity 0.2s ease;
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+    .floating-panel.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    
+    .floating-panel.hidden {
+      display: none;
+    }
+    
+    /* Hide on smaller screens to avoid overlapping */
+    @media (max-width: 1400px) {
+      .floating-panel {
+        display: none !important;
+      }
+    }
+    
+    .floating-panel-header {
+      background: linear-gradient(135deg, #f46f47 0%, #ff8c42 100%);
+      color: white;
+      padding: 12px 16px;
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .floating-panel-content {
+      padding: 12px;
+      max-height: 350px;
+      overflow-y: auto;
+    }
+    
+    .floating-panel-content::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .floating-panel-content::-webkit-scrollbar-thumb {
+      background: #cbd5e0;
+      border-radius: 3px;
+    }
+    
+    .unplaced-team-item {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      transition: all 0.2s ease;
+      cursor: grab;
+    }
+    
+    .unplaced-team-item:hover {
+      background: #edf2f7;
+      border-color: #cbd5e0;
+      transform: translateX(-2px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .unplaced-team-label {
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 4px;
+    }
+    
+    .unplaced-team-info {
+      font-size: 11px;
+      color: #718096;
+    }
   </style>
 </head>
 <body class="text-[#172a3a] min-h-screen flex flex-col" style="background-color: #f0f4f7;">
@@ -47,7 +150,7 @@
       <ul class="flex space-x-4">
         <li><a href="admin-email-templates.html" class="text-sm text-gray-700 hover:text-[#f46f47]">Email Templates</a></li>
         <li><a href="admin-chat-management.html" class="text-sm text-gray-700 hover:text-[#f46f47]">Chat Management</a></li>
-        <li><a href="admin-teams.html" class="text-sm text-gray-700 hover:text-[#f46f47]">Team Management</a></li>
+  <li><a href="admin-teams.html" class="text-sm text-gray-700 hover:text-[#f46f47]">User Management</a></li>
       </ul>
     </div>
   </nav>
@@ -84,7 +187,7 @@
         </div>
         <div>
           <label class="block text-sm font-semibold mb-1">Start time for the final party</label>
-          <input name="start_at" type="datetime-local" placeholder="YYYY-MM-DDTHH:MM" class="border border-[#f0f4f7] rounded-xl p-3 w-full focus:ring-2 focus:ring-[#f46f47] outline-none">
+          <input name="start_at" type="time" placeholder="HH:MM" class="border border-[#f0f4f7] rounded-xl p-3 w-full focus:ring-2 focus:ring-[#f46f47] outline-none">
         </div>
         <div>
           <label class="block text-sm font-semibold mb-1">Registration deadline</label>
@@ -93,6 +196,18 @@
         <div>
           <label class="block text-sm font-semibold mb-1">Payment deadline (optional)</label>
           <input name="payment_deadline" type="datetime-local" placeholder="YYYY-MM-DDTHH:MM" class="border border-[#f0f4f7] rounded-xl p-3 w-full focus:ring-2 focus:ring-[#f46f47] outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">Appetizer time (optional)</label>
+          <input name="appetizer_time" type="time" placeholder="HH:MM" class="border border-[#f0f4f7] rounded-xl p-3 w-full focus:ring-2 focus:ring-[#f46f47] outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">Main course time (optional)</label>
+          <input name="main_time" type="time" placeholder="HH:MM" class="border border-[#f0f4f7] rounded-xl p-3 w-full focus:ring-2 focus:ring-[#f46f47] outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">Dessert time (optional)</label>
+          <input name="dessert_time" type="time" placeholder="HH:MM" class="border border-[#f0f4f7] rounded-xl p-3 w-full focus:ring-2 focus:ring-[#f46f47] outline-none">
         </div>
         <div>
           <label class="block text-sm font-semibold mb-1">Capacity</label>
@@ -104,8 +219,22 @@
         </div>
         <div class="md:col-span-3">
           <label class="block text-sm font-semibold mb-1">Valid ZIP codes (optional)</label>
-          <input name="valid_zip_codes" type="text" placeholder="Comma-separated: 37073, 37075, ..." class="border border-[#f0f4f7] rounded-xl p-3 w-full focus:ring-2 focus:ring-[#f46f47] outline-none">
-          <div id="zip-codes-status" class="mt-1 text-xs text-[#4a5568]"></div>
+          <div class="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 shadow-inner">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="text-sm text-[#4a5568]">Select the postal codes where registrations are allowed.</p>
+              <div class="flex items-center gap-2">
+                <button type="button" id="zip-select-all" class="text-xs font-semibold px-3 py-1 rounded-full border border-[#cbd5f5] text-[#1d4ed8] bg-white hover:bg-[#eff6ff] transition">Check all</button>
+                <button type="button" id="zip-unselect-all" class="text-xs font-semibold px-3 py-1 rounded-full border border-[#cbd5f5] text-[#1d4ed8] bg-white hover:bg-[#eff6ff] transition">Uncheck all</button>
+              </div>
+            </div>
+            <div id="zip-checkboxes" class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2"></div>
+            <div class="mt-3 flex flex-wrap gap-2 items-center">
+              <input id="zip-manual-input" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Add a ZIP code" class="flex-1 min-w-[160px] border border-[#d1d5db] rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#cbd5f5]">
+              <button type="button" id="zip-add-btn" class="text-sm font-semibold px-4 py-2 rounded-xl bg-[#2563eb] text-white hover:bg-[#1d4ed8] transition shadow-sm">Add</button>
+            </div>
+            <div id="zip-codes-status" class="mt-2 text-xs text-[#4a5568]"></div>
+          </div>
+          <input name="valid_zip_codes" type="hidden">
         </div>
         <div class="md:col-span-3">
           <label class="block text-sm font-semibold mb-1">Final party address (optional)</label>
@@ -151,48 +280,6 @@
       </div>
     </section>
 
-    <!-- Participants Section -->
-    <section id="participants-section" class="bg-white/90 rounded-2xl shadow-xl p-6 border border-[#f0f4f7]">
-      <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-bold text-[#f46f47]">Participants</h2>
-      <div class="text-sm text-[#4a5568]" id="participants-count"></div>
-      </div>
-      <div class="flex flex-wrap gap-3 items-center mb-4">
-      <select id="participants-event-select" class="border border-[#f0f4f7] rounded-xl p-3"></select>
-        <option value="">Select an event</option>
-      </select>
-      <input id="participants-search" type="search" placeholder="Search name, email, or team" class="border border-[#f0f4f7] rounded-xl p-3 flex-1 min-w-[180px] focus:ring-2 focus:ring-[#f46f47] outline-none" autocomplete="off">
-      <div class="flex items-center gap-2"></div>
-        <button id="participants-refresh" class="bg-[#008080] text-white rounded-xl px-4 py-2 font-semibold shadow hover:bg-[#00b3b3] transition">Refresh</button>
-        <button id="participants-toggle" class="bg-[#4a5568] text-white rounded-xl px-4 py-2 font-semibold shadow hover:opacity-90 transition">Hide</button>
-      </div>
-      </div>
-      <div id="participants-loading" class="hidden text-sm text-[#4a5568] flex items-center gap-2">
-      <span class="spinner"></span>
-      <span>Loading participants…</span>
-      </div>
-      <div id="participants-summary" class="text-sm text-[#4a5568] mb-3"></div>
-      <div id="participants-table-wrapper" class="overflow-x-auto">
-      <table class="min-w-full text-sm"></table>
-        <thead>
-        <tr class="bg-[#f0f4f7]">
-          <th data-sort="last_name" class="p-2 text-left sortable">Last name</th>
-          <th data-sort="first_name" class="p-2 text-left sortable">First name</th>
-          <th data-sort="email" class="p-2 text-left sortable">Email</th>
-          <th data-sort="gender" class="p-2 text-left sortable">Gender</th>
-          <th data-sort="registration_status" class="p-2 text-left sortable">Registration status</th>
-          <th data-sort="payment_status" class="p-2 text-left sortable">Payment status</th>
-          <th data-sort="team_name" class="p-2 text-left sortable">Team</th>
-          <th data-sort="team_role" class="p-2 text-left sortable">Role</th>
-          <th data-sort="updated_display" class="p-2 text-left sortable">Updated</th>
-        </tr>
-        </thead>
-        <tbody id="participants-tbody"></tbody>
-      </table>
-      </div>
-      <div id="participants-empty" class="hidden text-sm text-[#4a5568] mt-3">No participants to display for this event.</div>
-    </section>
-
     <!-- Matching Panel -->
     <section class="bg-white/90 rounded-2xl shadow-xl p-6 border border-[#f0f4f7]">
       <h2 class="text-xl font-bold mb-4 text-[#f46f47]">Matching and Comparison</h2>
@@ -204,7 +291,7 @@
         <div class="md:col-span-3">
           <div class="flex justify-center md:justify-center md:items-center mt-2 md:mt-7">
             <button id="advanced-weight-toggle" type="button" class="flex items-center gap-2 text-sm font-semibold px-3 py-2 rounded-xl border border-[#cbd5f5] bg-white shadow-sm hover:bg-[#f1f5ff] transition" aria-expanded="false" aria-controls="advanced-weight-panel">
-              <span>Options avancées</span>
+              <span>Advanced options</span>
               <span id="advanced-weight-toggle-icon" class="text-xs">▼</span>
             </button>
           </div>
@@ -278,17 +365,29 @@
         </div>
       </div>
       <div class="mt-4 flex flex-wrap gap-3 items-center">
-        <label class="flex items-center gap-2"><input type="checkbox" class="accent-[#f46f47]" id="algo-greedy" checked> Greedy</label>
-        <label class="flex items-center gap-2"><input type="checkbox" class="accent-[#f46f47]" id="algo-random" checked> Random</label>
-        <label class="flex items-center gap-2"><input type="checkbox" class="accent-[#f46f47]" id="algo-local" > Local search</label>
+        <div class="flex items-center gap-2 bg-white/90 border border-[#e2e8f0] rounded-full px-3 py-1 shadow-sm">
+          <input type="checkbox" class="accent-[#f46f47] h-4 w-4" id="algo-greedy" checked>
+          <label for="algo-greedy" class="text-sm font-semibold text-[#172a3a]">Greedy</label>
+          <button type="button" class="algo-info inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#2563eb] text-white text-xs font-semibold hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#bfdbfe] focus:ring-offset-1" data-info="The greedy algorithm builds proposals phase by phase, always selecting the most promising option based on the current weights." data-title="Greedy Algorithm" aria-label="Learn more about the greedy algorithm">i</button>
+        </div>
+        <div class="flex items-center gap-2 bg-white/90 border border-[#e2e8f0] rounded-full px-3 py-1 shadow-sm">
+          <input type="checkbox" class="accent-[#f46f47] h-4 w-4" id="algo-random" checked>
+          <label for="algo-random" class="text-sm font-semibold text-[#172a3a]">Random</label>
+          <button type="button" class="algo-info inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#2563eb] text-white text-xs font-semibold hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#bfdbfe] focus:ring-offset-1" data-info="The random mode samples multiple random plans to explore unexpected combinations before applying your filters." data-title="Random Algorithm" aria-label="Learn more about the random algorithm">i</button>
+        </div>
+        <div class="flex items-center gap-2 bg-white/90 border border-[#e2e8f0] rounded-full px-3 py-1 shadow-sm">
+          <input type="checkbox" class="accent-[#f46f47] h-4 w-4" id="algo-local">
+          <label for="algo-local" class="text-sm font-semibold text-[#172a3a]">Local search</label>
+          <button type="button" class="algo-info inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#2563eb] text-white text-xs font-semibold hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#bfdbfe] focus:ring-offset-1" data-info="Local search starts from an existing solution and improves the score by swapping groups or tweaking routes." data-title="Local Search Algorithm" aria-label="Learn more about the local search algorithm">i</button>
+        </div>
         <button id="btn-start-matching" class="bg-[#008080] text-white rounded-xl px-4 py-2 font-semibold shadow hover:bg-[#00b3b3] transition">Start Matching</button>
         <button id="btn-refresh-matches" class="bg-[#ffc241] text-[#172a3a] rounded-xl px-4 py-2 font-semibold shadow hover:bg-[#ffe5d0] transition">Refresh Proposals</button>
         <button id="btn-delete-all-matches" class="bg-[#e53e3e] text-white rounded-xl px-4 py-2 font-semibold shadow hover:opacity-90 transition">Delete All Matches</button>
         <span id="matching-msg" class="text-sm"></span>
       </div>
-      <div id="matching-progress" class="hidden mt-3 w-full max-w-xl">
+      <div id="matching-progress" class="hidden mt-3 w-full max-w-xl transition-opacity duration-300 opacity-0">
         <div class="flex items-center justify-between text-xs text-[#4a5568] mb-1">
-          <span id="matching-progress-label">Préparation…</span>
+          <span id="matching-progress-label">Preparing...</span>
           <span id="matching-progress-value">0%</span>
         </div>
         <div class="w-full h-2 rounded-full bg-[#e2e8f0] overflow-hidden">
@@ -307,17 +406,6 @@
       </div>
     </section>
 
-    <!-- Cancellations / Refunds -->
-    <section class="bg-white/90 rounded-2xl shadow-xl p-6 border border-[#f0f4f7]">
-      <h2 class="text-xl font-bold mb-4 text-[#f46f47]">Cancellations & Refunds</h2>
-      <div class="flex flex-wrap gap-3 items-end">
-        <select id="refunds-event-select" class="border border-[#f0f4f7] rounded-xl p-3"></select>
-        <button id="btn-load-refunds" class="bg-[#008080] text-white rounded-xl px-4 py-2 font-semibold shadow hover:bg-[#00b3b3] transition">Load Overview</button>
-        <button id="btn-process-refunds" class="hidden bg-[#1b5e20] text-white rounded-xl px-4 py-2 font-semibold shadow hover:bg-[#2f7f33] transition">Process All</button>
-        <span id="refunds-msg" class="text-sm text-[#4a5568]"></span>
-      </div>
-      <div id="refunds-overview" class="mt-4 text-sm"></div>
-    </section>
 
     <!-- Travel Map -->
     <section class="bg-white/90 rounded-2xl shadow-xl p-6 border border-[#f0f4f7]">
@@ -367,9 +455,20 @@
   <div data-include="partials/footer.html"></div>
   <!-- Toast utility -->
   <script src="js/utils/toast.js"></script>
+  <script src="js/utils/dialog.js"></script>
   <script src="js/components/event-zip-autocomplete.js"></script>
-  <script src="js/admin-dashboard.js"></script>
-  <script src="js/admin-alerts.js"></script>
+  <script src="js/pages/admin/dashboard/helpers.js"></script>
+  <script src="js/pages/admin/dashboard/team-card-module.js"></script>
+  <script src="js/pages/admin/dashboard/issues-module.js"></script>
+  <script src="js/pages/admin/dashboard/events-module.js"></script>
+  <script src="js/pages/admin/dashboard/participants-module.js"></script>
+  <script src="js/pages/admin/dashboard/matching-module.js"></script>
+  <script src="js/pages/admin/dashboard/synthetic-module.js"></script>
+  <script src="js/pages/admin/dashboard/match-details-module.js"></script>
+  <script src="js/pages/admin/dashboard/map-module.js"></script>
+  <script src="js/pages/admin/dashboard/proposals-module.js"></script>
+  <script src="js/pages/admin/dashboard.js"></script>
+  <script src="js/pages/admin/alerts.js"></script>
   <script>
     // Initialize admin alerts when the dashboard is ready.
     (function(){

@@ -1,5 +1,9 @@
 // Admin Email Templates Management
 (function(){
+  const helpers = (window.dhAdminDashboard && window.dhAdminDashboard.helpers) || {};
+  const confirmDialog = (typeof helpers.showDialogConfirm === 'function')
+    ? helpers.showDialogConfirm
+    : (message, options)=> Promise.resolve(window.confirm(message));
   const listEl = document.getElementById('templateList');
   const editor = document.getElementById('editor');
   const statusEl = document.getElementById('status');
@@ -12,6 +16,7 @@
   };
   let currentKey = null;
   const variablesListEl = document.getElementById('variablesList');
+
 
   async function loadList(){
     listEl.innerHTML = '<li>Loading...</li>';
@@ -142,8 +147,9 @@
   }
 
   async function del(){
-    if(!currentKey){ editor.style.display='none'; return; }
-    if(!confirm('Delete template ' + currentKey + '?')) return;
+  if(!currentKey){ editor.style.display='none'; return; }
+  const confirmed = await confirmDialog('Delete template ' + currentKey + '?');
+  if (!confirmed) return;
     try {
       const { res } = await window.dh.apiDelete('/admin/email-templates/' + encodeURIComponent(currentKey));
       if(res.ok){

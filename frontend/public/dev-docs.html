@@ -317,12 +317,17 @@ flowchart TD
           </thead>
           <tbody>
             <tr>
-              <td><code>public/js/admin-dashboard.js</code></td>
+              <td><code>public/js/pages/admin/dashboard/helpers.js</code></td>
+              <td>Shared admin helpers (dialogs, DOM shortcuts).</td>
+              <td>- Centralize toast/dialog helpers across admin modules</td>
+            </tr>
+            <tr>
+              <td><code>public/js/pages/admin/dashboard.js</code></td>
               <td>Admin dashboard page logic.</td>
               <td>- Load metrics/lists; admin-only actions guarded</td>
             </tr>
             <tr>
-              <td><code>public/js/admin-email-templates.js</code></td>
+              <td><code>public/js/pages/admin/email-templates.js</code></td>
               <td>Admin email template editor.</td>
               <td>- Load, edit, preview, save templates</td>
             </tr>
@@ -374,7 +379,7 @@ flowchart TD
           detectedFunctions: 'Detected functions:',
           exports: 'Exports:',
           m_pageLoaded: 'Page HTML loaded',
-          m_includes: 'public/js/includes.js loads partials',
+          m_includes: 'public/js/core/includes.js loads partials',
           m_guard: 'Auth guard passes?',
           m_yes: 'yes',
           m_no: 'no',
@@ -406,7 +411,7 @@ flowchart TD
           detectedFunctions: 'Fonctions détectées :',
           exports: 'Exports :',
           m_pageLoaded: 'Page HTML chargée',
-          m_includes: 'public/js/includes.js charge les partiels',
+          m_includes: 'public/js/core/includes.js charge les partiels',
           m_guard: 'Contrôle d’accès réussi ?',
           m_yes: 'oui',
           m_no: 'non',
