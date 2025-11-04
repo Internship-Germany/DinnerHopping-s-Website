@@ -1,5 +1,9 @@
 // Admin Email Templates Management
 (function(){
+  const helpers = (window.dhAdminDashboard && window.dhAdminDashboard.helpers) || {};
+  const confirmDialog = (typeof helpers.showDialogConfirm === 'function')
+    ? helpers.showDialogConfirm
+    : (message, options)=> Promise.resolve(window.confirm(message));
   const listEl = document.getElementById('templateList');
   const editor = document.getElementById('editor');
   const statusEl = document.getElementById('status');
@@ -13,17 +17,6 @@
   let currentKey = null;
   const variablesListEl = document.getElementById('variablesList');
 
-  function getDialog(){
-    return (window.dh && window.dh.dialog) || null;
-  }
-
-  function showDialogConfirm(message, options){
-    const dlg = getDialog();
-    if (dlg && typeof dlg.confirm === 'function'){
-      return dlg.confirm(message, Object.assign({ title: 'Confirm action', tone: 'warning', confirmLabel: 'Delete', cancelLabel: 'Cancel', destructive: true }, options || {}));
-    }
-    return Promise.resolve(window.confirm(message));
-  }
 
   async function loadList(){
     listEl.innerHTML = '<li>Loading...</li>';
@@ -155,7 +148,7 @@
 
   async function del(){
   if(!currentKey){ editor.style.display='none'; return; }
-  const confirmed = await showDialogConfirm('Delete template ' + currentKey + '?');
+  const confirmed = await confirmDialog('Delete template ' + currentKey + '?');
   if (!confirmed) return;
     try {
       const { res } = await window.dh.apiDelete('/admin/email-templates/' + encodeURIComponent(currentKey));

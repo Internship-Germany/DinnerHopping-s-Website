@@ -84,7 +84,7 @@ def allow_team_splits() -> bool:
 @lru_cache(maxsize=1)
 def enable_result_optimization() -> bool:
     """Return whether to enable post-matching optimization to fix issues (default: enabled)."""
-    return _bool_env("MATCH_ENABLE_OPTIMIZATION", True)
+    return _bool_env("MATCH_ENABLE_OPTIMIZATION", False)
 
 
 @lru_cache(maxsize=1)

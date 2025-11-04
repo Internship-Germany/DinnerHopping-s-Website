@@ -1,70 +1,10 @@
 {
   "root": "public/js",
-  "generatedAt": "2025-10-06T09:54:10.901Z",
+  "generatedAt": "2025-10-30T15:16:17.881Z",
   "files": [
     {
-      "file": "js/admin-dashboard.js",
-      "functions": [
-        "$",
-        "$$",
-        "bindDetailsControls",
-        "bindDnD",
-        "bindMaps",
-        "bindRefunds",
-        "bindTeamMapButtons",
-        "buildVersionQuery",
-        "clearBtnLoading",
-        "clearLayers",
-        "close",
-        "doUpdate",
-        "drawLegend",
-        "drawPathsOn",
-        "ensureCsrf",
-        "ensureMainMap",
-        "enterCreateMode",
-        "enterEditMode",
-        "fmtDate",
-        "groupsByPhase",
-        "handleCreate",
-        "init",
-        "loadEvents",
-        "loadMatchDetails",
-        "loadProposals",
-        "loadTravelMapAll",
-        "loadTravelMapFiltered",
-        "openTeamMap",
-        "phaseColor",
-        "previewCurrentGroups",
-        "readForm",
-        "readWeights",
-        "refreshTeamMap",
-        "renderMatchDetailsBoard",
-        "renderTeamCard",
-        "selectedAlgorithms",
-        "setBtnLoading",
-        "setForm",
-        "startMatching",
-        "toDateInputValue",
-        "toDateTimeLocalInputValue",
-        "toast",
-        "toastLoading",
-        "update",
-        "validateCurrentGroups"
-      ],
-      "exported": []
-    },
-    {
-      "file": "js/admin-email-templates.js",
-      "functions": [
-        "Management",
-        "del",
-        "insertAtCursor",
-        "loadList",
-        "newTemplate",
-        "openTemplate",
-        "renderVariables",
-        "save"
-      ],
+      "file": "js/admin-alerts.js",
+      "functions": [],
       "exported": []
     },
     {
@@ -89,16 +29,54 @@
       "exported": []
     },
     {
+      "file": "js/components/event-zip-autocomplete.js",
+      "functions": [
+        "add",
+        "addManualZip",
+        "buildSuggestions",
+        "buildUrl",
+        "buildZipMap",
+        "cleanCityLabel",
+        "clearSuggestions",
+        "collectCodes",
+        "describeRegion",
+        "ensureEntry",
+        "ensureRelative",
+        "fetchPeliasSuggestions",
+        "handleCityChange",
+        "handleManualSubmit",
+        "hydrateSelectionsFromHidden",
+        "incorporateZipEntry",
+        "normalizeKey",
+        "push",
+        "renderSuggestions",
+        "renderZipCheckboxes",
+        "requestZipData",
+        "score",
+        "showStatus",
+        "showSuggestions",
+        "sortZipCodes",
+        "syncSelectedZips",
+        "updateSelectionSummary",
+        "updateZipField"
+      ],
+      "exported": []
+    },
+    {
       "file": "js/components/my-registrations.js",
       "functions": [
         "applyBadge",
         "chooseProviderAndCreatePayment",
+        "closeModal",
         "computeStatus",
         "fetchActiveEvents",
         "fetchEventDetail",
+        "fetchInvitations",
         "fetchRegistrations",
         "getProviders",
+        "isInvitedStatus",
         "loadProviders",
+        "openInvitationModal",
         "renderMyRegistrations",
         "renderRecord"
       ],
@@ -128,6 +106,7 @@
         "openProviderModal",
         "openRegisterModal",
         "setMode",
+        "setPartnerStatus",
         "startPayment",
         "tryFallback"
       ],
@@ -150,7 +129,14 @@
     },
     {
       "file": "js/core/auth-guard.js",
-      "functions": [],
+      "functions": [
+        "addEventListener",
+        "ensureAuthReady",
+        "evaluateAuth",
+        "hasStoredToken",
+        "onReady",
+        "setTimeout"
+      ],
       "exported": []
     },
     {
@@ -161,6 +147,7 @@
         "decodeJwtExp",
         "ensureBanner",
         "getStored",
+        "hasAuth",
         "hasHttpOnlySessionCookies",
         "injectBanner",
         "isBearerFallback",
@@ -187,6 +174,7 @@
         "apiPost",
         "apiPut",
         "buildJsonOptions",
+        "buildUrl",
         "decodeJwtExp",
         "doRefresh",
         "ensureCsrfFor",
@@ -206,7 +194,11 @@
         "addEventListener",
         "admins",
         "dlog",
+        "forEach",
+        "initHeaderLogout",
         "isDbg",
+        "protectLinksIfUnauthed",
+        "redirect",
         "revealAdminIfAllowed",
         "setTimeout",
         "then"
@@ -256,10 +248,371 @@
     },
     {
       "file": "js/includes.js",
+      "functions": [],
+      "exported": []
+    },
+    {
+      "file": "js/init/providers.js",
       "functions": [
-        "highlightActiveLinks",
-        "injectIncludes",
-        "runScripts"
+        "populateProviderTemplate"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/js-manifest.js",
+      "functions": [],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/alerts.js",
+      "functions": [
+        "createActionButton",
+        "createMeta",
+        "fallbackFetch",
+        "formatCurrency",
+        "getApiFetch",
+        "initAdminAlerts",
+        "mergeRequestOptions",
+        "removeAlert",
+        "renderAlert",
+        "requestJson",
+        "showDialogAlert"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/chat-management.js",
+      "functions": [
+        "Management",
+        "apiGet",
+        "clearChatsForEvent",
+        "createChatForEvent",
+        "deleteGroup",
+        "el",
+        "loadEvents",
+        "loadGroupsForSelectedEvent",
+        "postMessageToGroup",
+        "viewGroupMessages"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/events-module.js",
+      "functions": [
+        "createEventsModule",
+        "enterCreateMode",
+        "enterEditMode",
+        "readForm",
+        "setForm",
+        "toTimeInputValue",
+        "updateState"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/helpers.js",
+      "functions": [
+        "close",
+        "update"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/issues-module.js",
+      "functions": [
+        "createIssueCard",
+        "createIssueChip",
+        "createIssuesModule",
+        "resolveIssueMeta",
+        "toneForIssues",
+        "updateState"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/map-module.js",
+      "functions": [
+        "bindMaps",
+        "bindTeamMapButtons",
+        "buildVersionQuery",
+        "clearLayers",
+        "close",
+        "createMapModule",
+        "drawLegend",
+        "drawPathsOn",
+        "ensureMainMap",
+        "ensureTeamMap",
+        "loadTravelMapAll",
+        "loadTravelMapFiltered",
+        "noopLoader",
+        "notify",
+        "openTeamMap",
+        "phaseColor",
+        "refreshTeamMap",
+        "startLoader",
+        "update",
+        "updateState"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/match-details-module.js",
+      "functions": [
+        "calculateLocalMetrics",
+        "createMatchDetailsModule",
+        "extractSoloIdsFromSynthetic",
+        "groupsByPhase",
+        "hostFallbackAllergiesFor",
+        "normalizeList",
+        "renderMatchDetailsBoard",
+        "teamAllergiesFor",
+        "updateState"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/matching-module.js",
+      "functions": [
+        "close",
+        "confirmAndRelease",
+        "createMatchingModule",
+        "ensureTeamNames",
+        "update",
+        "updateState"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/participants-module.js",
+      "functions": [
+        "applyFilters",
+        "createParticipantsModule",
+        "fetchAndRender",
+        "formatGender",
+        "formatPaymentStatus",
+        "formatRegistrationStatus",
+        "formatTeamRole",
+        "init",
+        "onEventsRefreshed",
+        "paymentBadgeClass",
+        "render",
+        "renderRow",
+        "setLoading",
+        "sortValue",
+        "updateCount",
+        "updateSortHeaders",
+        "updateSummary"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/proposals-module.js",
+      "functions": [
+        "buildIssueCard",
+        "buildIssueChip",
+        "close",
+        "createProposalsModule",
+        "ensureEntry",
+        "formatDate",
+        "labelForTeam",
+        "loadProposals",
+        "notify",
+        "startLoader",
+        "update",
+        "updateState"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/synthetic-module.js",
+      "functions": [
+        "autoPersistSyntheticPair",
+        "buildSplitTeamDetails",
+        "cleanupTemporarySyntheticTeams",
+        "close",
+        "createPairFromStage",
+        "createSyntheticModule",
+        "ensureSyntheticSplitDraft",
+        "ensureSyntheticStyles",
+        "finalizeComponentUsage",
+        "generatePairIdFromComponents",
+        "generateSplitId",
+        "getSplitMemberStatus",
+        "handleSyntheticPanelDragLeave",
+        "handleSyntheticPanelDragOver",
+        "handleSyntheticPanelDrop",
+        "isManagedPairId",
+        "isManagedSplitId",
+        "isSyntheticId",
+        "isTeamIdPlaced",
+        "listAvailableSyntheticParticipants",
+        "recordSyntheticTempId",
+        "refreshSplitMemberStates",
+        "removeCreatedPairFromDrafts",
+        "removeSyntheticManagementPanel",
+        "removeTeamFromGroups",
+        "renderSyntheticAvailableParticipants",
+        "renderSyntheticCreateStage",
+        "rollbackSyntheticPair",
+        "sanitizeForSyntheticId",
+        "setSplitMemberStatus",
+        "syntheticPanelZoneFromEvent",
+        "updateState",
+        "updateSyntheticManagementPanel"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard/team-card-module.js",
+      "functions": [
+        "buildMemberPreview",
+        "buildTeamPreview",
+        "computeTeamLabel",
+        "createTeamCardModule",
+        "formatMemberName",
+        "renderTeamCard",
+        "setIsSyntheticChecker",
+        "updateState"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/dashboard.js",
+      "functions": [
+        "animateMatchingProgress",
+        "applyMatchingProgress",
+        "beginMatchingJobTracking",
+        "bindAdvancedWeightsToggle",
+        "bindAlgorithmInfo",
+        "bindDetailsControls",
+        "bindDnD",
+        "bindRefunds",
+        "bindSyntheticTeamButtons",
+        "bindTeamNameButtons",
+        "bindWeightInfo",
+        "calculateLocalMetrics",
+        "clearBtnLoading",
+        "copyEmailToClipboard",
+        "doUpdate",
+        "ensureCsrf",
+        "extractProposalVersions",
+        "extractSoloIdsFromSynthetic",
+        "fetchIssuesForDetails",
+        "flashMatchingMessage",
+        "get",
+        "getTeamLabel",
+        "groupsByPhase",
+        "handleCreate",
+        "handleMatchingJobCompletion",
+        "hideMatchingProgressContainer",
+        "init",
+        "initializeEventsModule",
+        "initializeIssuesModule",
+        "initializeMapModule",
+        "initializeMatchDetailsModule",
+        "initializeMatchingModule",
+        "initializeParticipantsModule",
+        "initializeProposalsModule",
+        "initializeSyntheticModule",
+        "initializeTeamCardModule",
+        "loadEvents",
+        "loadMatchDetails",
+        "markUnsaved",
+        "pollMatchingJob",
+        "previewCurrentGroups",
+        "readWeights",
+        "removeSyntheticManagementPanel",
+        "renderMatchDetailsBoard",
+        "resetMatchingProgress",
+        "resumeMatchingProgressIfNeeded",
+        "safeRun",
+        "selectedAlgorithms",
+        "setBtnLoading",
+        "setupFloatingPanelScrollListener",
+        "showMatchingProgressContainer",
+        "startMatching",
+        "step",
+        "stopMatchingJobPolling",
+        "syncMatchDetailsModuleDependencies",
+        "syncState",
+        "toDateInputValue",
+        "toDateTimeLocalInputValue",
+        "translateJobMessage",
+        "updateFloatingPanelPositions",
+        "updateMatchingProgressUI",
+        "updateTeamNameCache",
+        "updateUnplacedTeamsPanels",
+        "validateCurrentGroups",
+        "versionKey"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin/email-templates.js",
+      "functions": [
+        "Management",
+        "del",
+        "insertAtCursor",
+        "loadList",
+        "newTemplate",
+        "openTemplate",
+        "renderVariables",
+        "save"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin-teams.js",
+      "functions": [],
+      "exported": []
+    },
+    {
+      "file": "js/pages/admin-user-management.js",
+      "functions": [
+        "$",
+        "applyFilter",
+        "applyFilterParticipants",
+        "applyFilters",
+        "bindTeamControls",
+        "close",
+        "escapeHtml",
+        "fetchAndRender",
+        "fmtDate",
+        "formatGender",
+        "formatPaymentStatus",
+        "formatRegistrationStatus",
+        "formatTeamRole",
+        "getDialog",
+        "init",
+        "loadEvents",
+        "loadOverview",
+        "loadTeams",
+        "participantsModule",
+        "paymentBadgeClass",
+        "populateTeamEventSelect",
+        "processAll",
+        "refundsModule",
+        "releasePlans",
+        "render",
+        "renderRow",
+        "renderTeamBadge",
+        "renderTeams",
+        "resetOverview",
+        "sendIncompleteReminders",
+        "setEvents",
+        "setLoading",
+        "showDialogAlert",
+        "showDialogConfirm",
+        "showLoadingToast",
+        "showToast",
+        "sortValue",
+        "toggleTeamActions",
+        "update",
+        "updateCount",
+        "updateParticipantStats",
+        "updateSortHeaders",
+        "updateSummary",
+        "updateTeamStats"
       ],
       "exported": []
     },
@@ -283,27 +636,47 @@
       "file": "js/pages/event.js",
       "functions": [
         "authHeaders",
-        "buildProviderChooser",
+        "close",
+        "describePaymentOptions",
+        "determineRoleAndWire",
+        "disableControls",
         "doCancel",
+        "doCancelAsCreator",
+        "doCancelAsMember",
+        "enableControls",
         "fetchJson",
-        "fetchProviders",
-        "finalizeUI",
-        "firstName",
-        "hasLegacyTokenCookie",
-        "loadEvent",
-        "loadPlan",
-        "loadProfileForPrefill",
+        "fetchPaymentProviders",
+        "formatFinalPartyTime",
+        "formatList",
+        "formatTime",
+        "handleSubmit",
+        "initMap",
+        "isHost",
         "loadRegistration",
-        "loadRegistrationPaymentStatus",
-        "ShowSoloForm",
+        "logEventPlan",
+        "openPaymentDialog",
+        "providerLabel",
         "pushMessage",
-        "renderPlan",
+        "refundStatus",
         "renderRegistration",
+        "sanitizeManualMessage",
         "setupStaticCancelBox",
+        "setupTeamCancelBox",
         "showError",
         "showSuccess",
         "startPaymentFlow",
-        "updateMainCourseAvailability"
+        "startProviderPayment",
+        "updateDetailsButtonVisibility",
+        "updateMealSection",
+        "updateSelection"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/faq.js",
+      "functions": [
+        "addEventListener",
+        "forEach"
       ],
       "exported": []
     },
@@ -331,13 +704,51 @@
       "exported": []
     },
     {
+      "file": "js/pages/invitation.js",
+      "functions": [
+        "Init",
+        "createRow",
+        "el",
+        "fetchInvitationByState",
+        "fetchInvitationByToken",
+        "formatDate",
+        "init",
+        "openAuthModal",
+        "qs",
+        "renderInvitation",
+        "showContent",
+        "showError",
+        "showLoading",
+        "showMessage"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/invitations-accepted.js",
+      "functions": [
+        "isSafe",
+        "path"
+      ],
+      "exported": []
+    },
+    {
       "file": "js/pages/login.js",
       "functions": [
         "activate",
         "hint",
         "isSafe",
+        "setLoading",
         "showMessage",
         "update"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/payment-success.js",
+      "functions": [
+        "handlePayPalToken",
+        "isSafe",
+        "path"
       ],
       "exported": []
     },
@@ -387,7 +798,11 @@
       "functions": [
         "el",
         "fetchActiveEvents",
+        "fetchUserInvitations",
+        "fetchUserRegistrations",
+        "hasActiveRegistration",
         "init",
+        "isTerminal",
         "startSolo",
         "startTeam"
       ],
@@ -398,6 +813,28 @@
       "functions": [
         "setMsg",
         "update"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/team-invitation.js",
+      "functions": [
+        "handleDecline",
+        "init",
+        "loadTeamDetails",
+        "renderTeamDetails",
+        "showError",
+        "showStatus"
+      ],
+      "exported": []
+    },
+    {
+      "file": "js/pages/verify-email.js",
+      "functions": [
+        "hideSpinner",
+        "setMessage",
+        "showActions",
+        "verify"
       ],
       "exported": []
     },
@@ -443,6 +880,28 @@
       "exported": []
     },
     {
+      "file": "js/utils/dialog.js",
+      "functions": [
+        "alert",
+        "appendListItem",
+        "appendParagraph",
+        "applyEntrance",
+        "buildMessageElement",
+        "buildTitleElement",
+        "closeDialog",
+        "confirm",
+        "ensureList",
+        "ensureRoot",
+        "lockBody",
+        "normalizeMessage",
+        "onKeydown",
+        "pages",
+        "showDialog",
+        "unlockBody"
+      ],
+      "exported": []
+    },
+    {
       "file": "js/utils/dom.js",
       "functions": [
         "cloneTpl",
@@ -462,6 +921,14 @@
       "exported": []
     },
     {
+      "file": "js/utils/kitchen-toggle.js",
+      "functions": [
+        "addEventListener",
+        "toggleFieldsFromTarget"
+      ],
+      "exported": []
+    },
+    {
       "file": "js/utils/network-errors.js",
       "functions": [
         "ensureWrapper",
@@ -473,6 +940,7 @@
     {
       "file": "js/utils/registration.js",
       "functions": [
+        "_valToBool",
         "aggregateDiet",
         "buildRegistrationPayload"
       ],

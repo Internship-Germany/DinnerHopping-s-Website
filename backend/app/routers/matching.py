@@ -4,7 +4,8 @@ from bson.objectid import ObjectId
 from bson.errors import InvalidId
 from ..auth import require_admin
 from ..utils import require_event_published
-from typing import Optional, List, Dict, Any, Tuple, Set
+from typing import Dict, List, Optional, Any, Tuple, Set
+import re
 from ..services.matching import (
     list_issues,
     finalize_and_generate_plans,
@@ -99,15 +100,37 @@ def _pair_key(a: str, b: str) -> Tuple[str, str]:
 def _collect_pairs(groups: List[dict]) -> Dict[Tuple[str,str], int]:
     counts: Dict[Tuple[str,str], int] = {}
     for g in groups:
-        host = g.get('host_team_id')
-        guests = g.get('guest_team_ids') or []
+        if not isinstance(g, dict):
+            continue
+        host_raw = g.get('host_team_id')
+        host: Optional[str] = None
+        if host_raw is not None:
+            candidate = str(host_raw).strip()
+            if candidate:
+                host = candidate
+        guests_raw = g.get('guest_team_ids') or []
+        guests: List[str] = []
+        for entry in guests_raw:
+            if entry is None:
+                continue
+            candidate = str(entry).strip()
+            if not candidate:
+                continue
+            guests.append(candidate)
         # host meets each guest
-        for t in guests:
-            pk = _pair_key(host, t)
-            counts[pk] = counts.get(pk, 0) + 1
+        if host is not None:
+            for t in guests:
+                if t is None:
+                    continue
+                pk = _pair_key(host, t)
+                counts[pk] = counts.get(pk, 0) + 1
         # guests also meet each other in same group
         for i in range(len(guests)):
+            if guests[i] is None:
+                continue
             for j in range(i+1, len(guests)):
+                if guests[j] is None:
+                    continue
                 pk = _pair_key(guests[i], guests[j])
                 counts[pk] = counts.get(pk, 0) + 1
     return counts
@@ -380,19 +403,106 @@ async def match_details(event_id: str, version: Optional[int] = None, _=Depends(
     unmatched_units: List[dict] = m.get('unmatched_units') or []
     unmatched_by_id: Dict[str, dict] = {str(entry.get('team_id')): entry for entry in unmatched_units if entry.get('team_id')}
 
-    # Add details for synthetic units (pair:, split:) by finding their original solo teams
+    # Add details for synthetic units (pair:, split:) by resolving tokens back to participant emails
+    def _sanitize_token(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        token = re.sub(r'[^a-z0-9]+', '-', str(value).lower()).strip('-')
+        return token or None
+
+    def _emails_for_team_entry(team_entry: dict) -> List[str]:
+        emails: List[str] = []
+        for reg in team_entry.get('member_regs') or []:
+            em = reg.get('user_email_snapshot')
+            if em:
+                emails.append(str(em).strip().lower())
+        team_doc = team_entry.get('team_doc') or {}
+        for member in team_doc.get('members') or []:
+            em = member.get('email')
+            if em:
+                emails.append(str(em).strip().lower())
+        seen: Set[str] = set()
+        deduped: List[str] = []
+        for em in emails:
+            if em and em not in seen:
+                seen.add(em)
+                deduped.append(em)
+        return deduped
+
     solo_teams_by_email: Dict[str, dict] = {}
-    for t in teams:
-        tid = str(t['team_id'])
-        if tid.startswith('solo:'):
-            # Get email from first member or registration
-            emails = []
-            for r in t.get('member_regs') or []:
-                em = r.get('user_email_snapshot')
-                if em:
-                    emails.append(em.lower())
-            if emails:
-                solo_teams_by_email[emails[0]] = t
+    email_to_team: Dict[str, dict] = {}
+    token_to_email: Dict[str, str] = {}
+    token_to_team: Dict[str, dict] = {}
+
+    def _record_email(entry: dict, email: str) -> None:
+        if not email:
+            return
+        normalized = str(email).strip().lower()
+        if not normalized:
+            return
+        email_to_team.setdefault(normalized, entry)
+        token_to_email.setdefault(normalized, normalized)
+        slug = _sanitize_token(normalized)
+        if slug:
+            token_to_email.setdefault(slug, normalized)
+
+    for team_entry in teams:
+        tid = str(team_entry.get('team_id'))
+        token_to_team.setdefault(tid.lower(), team_entry)
+        slug_tid = _sanitize_token(tid)
+        if slug_tid:
+            token_to_team.setdefault(slug_tid, team_entry)
+        team_emails = _emails_for_team_entry(team_entry)
+        if tid.startswith('solo:') and team_emails:
+            solo_teams_by_email.setdefault(team_emails[0], team_entry)
+        if tid and team_emails:
+            primary_email = team_emails[0]
+            token_to_email.setdefault(tid.lower(), primary_email)
+            if slug_tid:
+                token_to_email.setdefault(slug_tid, primary_email)
+        for em in team_emails:
+            _record_email(team_entry, em)
+        team_doc = team_entry.get('team_doc') or {}
+        for member in team_doc.get('members') or []:
+            member_email = (member.get('email') or '').strip().lower()
+            if member_email:
+                _record_email(team_entry, member_email)
+            for key in ('display_name', 'first_name', 'last_name'):
+                val = member.get(key)
+                slug = _sanitize_token(val) if val else None
+                if slug and member_email:
+                    token_to_email.setdefault(slug, member_email)
+
+    def _resolve_emails_from_token(token: str) -> List[str]:
+        if not token:
+            return []
+        normalized = str(token).strip().lower()
+        results: List[str] = []
+        direct = token_to_email.get(normalized)
+        if direct:
+            results.append(direct)
+        else:
+            slug = _sanitize_token(normalized)
+            if slug:
+                mapped = token_to_email.get(slug)
+                if mapped:
+                    results.append(mapped)
+        target_team = token_to_team.get(normalized)
+        if not target_team:
+            slug = _sanitize_token(normalized)
+            if slug:
+                target_team = token_to_team.get(slug)
+        if target_team:
+            for em in _emails_for_team_entry(target_team):
+                if em not in results:
+                    results.append(em)
+        seen: Set[str] = set()
+        deduped: List[str] = []
+        for em in results:
+            if em and em not in seen:
+                seen.add(em)
+                deduped.append(em)
+        return deduped
     
     # Now for each pair/split ID in groups, build team_map entry
     all_synthetic_ids = set()
@@ -411,13 +521,29 @@ async def match_details(event_id: str, version: Optional[int] = None, _=Depends(
             # Extract emails from the ID
             if uid.startswith('pair:'):
                 part = uid.split(':', 1)[1]
-                pair_emails = [e.lower() for e in part.split('+') if e] if '+' in part else ([part.lower()] if part else [])
+                components = [c for c in part.split('+') if c]
+                resolved_list: List[str] = []
+                fallback_tokens: List[str] = []
+                for component in components:
+                    matches = _resolve_emails_from_token(component)
+                    if matches:
+                        for em in matches:
+                            if em not in resolved_list:
+                                resolved_list.append(em)
+                    else:
+                        token = component.strip().lower()
+                        if token:
+                            fallback_tokens.append(token)
+                pair_emails = resolved_list or fallback_tokens
             elif uid.startswith('split:'):
-                email = uid.split(':', 1)[1]
-                pair_emails = [email.lower()] if email else []
+                parts = uid.split(':', 2)
+                tail = parts[2] if len(parts) > 2 else (parts[1] if len(parts) > 1 else '')
+                matches = _resolve_emails_from_token(tail)
+                pair_emails = matches if matches else ([tail.strip().lower()] if tail else [])
             else:
                 pair_emails = []
-            
+            pair_emails = [em.strip().lower() for em in pair_emails if em]
+
             # Merge info from solo teams
             diet_list = []
             prefs = []
@@ -451,6 +577,27 @@ async def match_details(event_id: str, version: Optional[int] = None, _=Depends(
                     # Collect active registration IDs
                     solo_tid = str(solo_t.get('team_id', ''))
                     active_reg_ids.extend(team_active_regs.get(solo_tid, []))
+                else:
+                    team_entry = email_to_team.get(em)
+                    if team_entry:
+                        if team_entry.get('team_diet'):
+                            diet_list.append(team_entry.get('team_diet'))
+                        if team_entry.get('course_preference'):
+                            prefs.append(team_entry.get('course_preference'))
+                        if team_entry.get('can_host_main'):
+                            can_host_main = True
+                        if team_entry.get('can_host_any'):
+                            can_host_any = True
+                        for a in (team_entry.get('allergies') or []):
+                            allergies_set.add(a)
+                        for a in (team_entry.get('host_allergies') or []):
+                            host_allergies_set.add(a)
+                        if team_entry.get('lat') is not None:
+                            lat_vals.append(team_entry.get('lat'))
+                        if team_entry.get('lon') is not None:
+                            lon_vals.append(team_entry.get('lon'))
+                        source_tid = str(team_entry.get('team_id', ''))
+                        active_reg_ids.extend(team_active_regs.get(source_tid, []))
             
             # Merge diet (prioritize restrictive)
             team_diet = 'omnivore'
@@ -500,6 +647,95 @@ async def match_details(event_id: str, version: Optional[int] = None, _=Depends(
                 },
             }
     
+    # Ensure all normal (non-synthetic) unmatched teams have their details in team_map
+    # This handles cases where unmatched teams were filtered out by _build_teams
+    unmatched_normal_team_ids = []
+    for entry in unmatched_units:
+        tid = entry.get('team_id')
+        if tid and isinstance(tid, str):
+            tid_str = str(tid)
+            # Only process normal teams (not synthetic like pair: or split:)
+            if not tid_str.startswith(('pair:', 'split:', 'solo:')):
+                if tid_str not in team_map:
+                    unmatched_normal_team_ids.append(tid)
+    
+    # Load missing teams from database
+    if unmatched_normal_team_ids:
+        # Convert string IDs to ObjectId for querying
+        try:
+            oids = [ObjectId(tid) for tid in unmatched_normal_team_ids if tid]
+        except Exception:
+            oids = []
+        
+        if oids:
+            async for team_doc in db_mod.db.teams.find({'_id': {'$in': oids}}):
+                tid_str = str(team_doc.get('_id'))
+                # Get basic team info
+                members_list = team_doc.get('members') or []
+                emails = [m.get('email') for m in members_list if m.get('email')]
+                fallback_members: List[dict] = []
+                for member in members_list:
+                    if not isinstance(member, dict):
+                        continue
+                    email_val = member.get('email')
+                    first_val = (member.get('first_name') or member.get('firstname') or '')
+                    last_val = (member.get('last_name') or member.get('lastname') or '')
+                    display_val = (member.get('display_name') or '').strip()
+                    if not display_val:
+                        display_val = f"{first_val or ''} {last_val or ''}".strip()
+                    if not display_val and isinstance(email_val, str):
+                        display_val = email_val.split('@')[0] if '@' in email_val else email_val
+                    fallback_members.append({
+                        'email': email_val,
+                        'first_name': first_val.strip() or None,
+                        'last_name': last_val.strip() or None,
+                        'display_name': display_val or None,
+                    })
+                
+                # Try to get registrations for this team to get size
+                team_regs = []
+                async for reg in db_mod.db.registrations.find({
+                    'team_id': team_doc.get('_id'),
+                    'event_id': ev['_id'],
+                    'status': {'$nin': ['cancelled_by_user', 'cancelled_admin', 'refunded', 'expired']}
+                }):
+                    team_regs.append(reg)
+                
+                size = max((reg.get('team_size') or len(members_list) or 1) for reg in team_regs) if team_regs else len(members_list) or 1
+                
+                entry: Dict[str, Any] = {
+                    'size': size,
+                    'team_diet': team_doc.get('team_diet') or 'omnivore',
+                    'course_preference': team_doc.get('course_preference'),
+                    'can_host_main': team_doc.get('can_host_main'),
+                    'can_host_any': team_doc.get('can_host_any'),
+                    'lat': None,  # Will be filled later if needed
+                    'lon': None,
+                    'allergies': [],
+                    'host_allergies': [],
+                    'emails': emails,
+                    'payment': {
+                        'status': 'n/a',
+                        'paid_count': 0,
+                        'active_reg_count': 0,
+                    },
+                }
+                if fallback_members:
+                    entry['fallback_members'] = fallback_members
+                    entry['members'] = fallback_members
+                    first_member = next((m for m in fallback_members if (m.get('display_name') or m.get('first_name') or m.get('last_name'))), None)
+                    if first_member:
+                        label = (first_member.get('display_name') or '').strip()
+                        if not label:
+                            label = f"{first_member.get('first_name') or ''} {first_member.get('last_name') or ''}".strip()
+                        if label:
+                            entry['name'] = label
+                team_name = team_doc.get('name')
+                if isinstance(team_name, str) and team_name.strip():
+                    entry['name'] = team_name.strip()
+
+                team_map[tid_str] = entry
+    
     # Attach members (names) using team->emails mapping
     base_emails_map = await _team_emails_map(event_id)
     # Augment with split: and pair: IDs from groups
@@ -515,6 +751,23 @@ async def match_details(event_id: str, version: Optional[int] = None, _=Depends(
                 segment = uid.split(':', 1)[1] if ':' in uid else ''
                 emails = [e for e in segment.split('+') if e]
                 emails_map[uid] = emails
+    
+    # Also ensure ALL unmatched teams (not just synthetic) have email entries
+    # This ensures unmatched normal teams also get their member names displayed
+    for entry in unmatched_units:
+        uid = entry.get('team_id')
+        if uid:
+            # Normalize team_id to string for consistent lookups
+            tid_str = str(uid)
+            if tid_str not in emails_map:
+                # Try base_emails_map first (contains all teams from DB)
+                if tid_str in base_emails_map:
+                    emails_map[tid_str] = base_emails_map[tid_str]
+                else:
+                    # Fallback: try to get emails from team_map
+                    team_emails = team_map.get(tid_str, {}).get('emails', [])
+                    if team_emails:
+                        emails_map[tid_str] = team_emails
     # Gather all emails to bulk fetch names (normalize to lowercase)
     all_emails = set()
     for ems in emails_map.values():
@@ -550,7 +803,32 @@ async def match_details(event_id: str, version: Optional[int] = None, _=Depends(
             else:
                 disp = em.split('@')[0] if '@' in em else em
             members.append({'email': em, 'first_name': fn or None, 'last_name': ln or None, 'display_name': disp})
-        team_map.setdefault(tid, {})['members'] = members
+        entry = team_map.setdefault(tid, {})
+        if not members:
+            fallback_members = entry.get('fallback_members')
+            if isinstance(fallback_members, list) and fallback_members:
+                members = fallback_members
+        entry['members'] = members
+        entry.pop('fallback_members', None)
+
+        existing_name = entry.get('name')
+        if isinstance(existing_name, str) and existing_name.strip():
+            continue
+        first_member = next((m for m in members if isinstance(m, dict) and (m.get('display_name') or m.get('first_name') or m.get('last_name') or m.get('email'))), None)
+        if first_member:
+            label = (first_member.get('display_name') or '').strip()
+            if not label:
+                fn = (first_member.get('first_name') or '').strip()
+                ln = (first_member.get('last_name') or '').strip()
+                label = f"{fn} {ln}".strip()
+            if (not label) and isinstance(first_member.get('email'), str):
+                email_val = first_member['email']
+                label = email_val.split('@')[0] if '@' in email_val else email_val
+            if label:
+                entry['name'] = label
+    for entry in team_map.values():
+        if isinstance(entry, dict):
+            entry.pop('fallback_members', None)
     # Compose output
     out = {
         'version': m.get('version'),
@@ -1184,15 +1462,44 @@ async def validate_groups(event_id: str, payload: dict, _=Depends(require_admin)
     Returns: { violations: [...], phase_issues: [...], group_issues: [...] }
     """
     await require_event_published(event_id)
-    groups = payload.get('groups') or []
+    raw_groups = payload.get('groups') or []
+    normalized_groups: List[dict] = []
+    group_issues: List[dict] = []
+    for idx, group in enumerate(raw_groups):
+        if not isinstance(group, dict):
+            group_issues.append({'phase': '?', 'group_idx': idx, 'issue': 'invalid_group_payload'})
+            continue
+        phase_raw = group.get('phase')
+        phase = str(phase_raw) if phase_raw is not None else ''
+        host_raw = group.get('host_team_id')
+        host_id = str(host_raw) if host_raw is not None else None
+        guests_raw = group.get('guest_team_ids')
+        guests_seq = []
+        errors: List[str] = []
+        if guests_raw is None:
+            guests_seq = []
+        elif isinstance(guests_raw, list):
+            guests_seq = guests_raw
+        else:
+            guests_seq = [guests_raw]
+            errors.append('guest_ids_not_list')
+        guest_ids = [str(item) for item in guests_seq if item is not None]
+        normalized_groups.append({
+            'phase': phase,
+            'host_team_id': host_id,
+            'guest_team_ids': guest_ids,
+            '_errors': errors,
+        })
+
     # duplicate pair counts
-    pair_counts = _collect_pairs(groups)
+    pair_counts = _collect_pairs(normalized_groups)
     violations = [ {'pair': list(pk), 'count': c} for pk, c in pair_counts.items() if c > 1 ]
     # phase-level: team appears more than once in same phase
     phase_seen: Dict[str, Set[str]] = {}
     phase_issues: List[dict] = []
-    for g in groups:
-        phase = str(g.get('phase'))
+    for g in normalized_groups:
+        phase = g.get('phase') or ''
+        label_phase = phase if phase else '?'
         phase_seen.setdefault(phase, set())
         ids = []
         if g.get('host_team_id') is not None:
@@ -1201,25 +1508,27 @@ async def validate_groups(event_id: str, payload: dict, _=Depends(require_admin)
         for tid in ids:
             key = f"{phase}:{tid}"
             if tid in phase_seen[phase]:
-                phase_issues.append({'phase': phase, 'team_id': tid, 'issue': 'duplicate_in_phase'})
+                phase_issues.append({'phase': label_phase, 'team_id': tid, 'issue': 'duplicate_in_phase'})
             phase_seen[phase].add(tid)
     # group-level structural issues
-    group_issues: List[dict] = []
     by_phase: Dict[str, List[dict]] = {}
-    for g in groups:
-        p = str(g.get('phase'))
+    for g in normalized_groups:
+        p = g.get('phase') or ''
         by_phase.setdefault(p, []).append(g)
     for p, lst in by_phase.items():
+        phase_label = p if p else '?'
         for idx, g in enumerate(lst):
             host = g.get('host_team_id')
             guests = g.get('guest_team_ids') or []
             if host is None:
-                group_issues.append({'phase': p, 'group_idx': idx, 'issue': 'missing_host'})
+                group_issues.append({'phase': phase_label, 'group_idx': idx, 'issue': 'missing_host'})
             if len(guests) != 2:
-                group_issues.append({'phase': p, 'group_idx': idx, 'issue': f'invalid_guest_count:{len(guests)}'})
+                group_issues.append({'phase': phase_label, 'group_idx': idx, 'issue': f'invalid_guest_count:{len(guests)}'})
             # prevent host duplicated as guest
             if host is not None and any(str(x) == str(host) for x in guests):
-                group_issues.append({'phase': p, 'group_idx': idx, 'issue': 'host_in_guests'})
+                group_issues.append({'phase': phase_label, 'group_idx': idx, 'issue': 'host_in_guests'})
+            for err in g.get('_errors', []):
+                group_issues.append({'phase': phase_label, 'group_idx': idx, 'issue': err})
     return {'violations': violations, 'phase_issues': phase_issues, 'group_issues': group_issues}
 
 

@@ -43,7 +43,7 @@
   function showDialogConfirm(message, options){
     const dlg = getDialog();
     if (dlg && typeof dlg.confirm === 'function'){
-      return dlg.confirm(message, Object.assign({ tone: 'warning', confirmLabel: 'Continuer', cancelLabel: 'Annuler' }, options || {}));
+      return dlg.confirm(message, Object.assign({ tone: 'warning', confirmLabel: 'Continue', cancelLabel: 'Cancel' }, options || {}));
     }
     return Promise.resolve(window.confirm(message));
   }
