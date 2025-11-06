@@ -138,11 +138,20 @@
         .filter((tid)=> !tid.startsWith('pair:') && !tid.startsWith('split:'))
         .filter((tid)=> !hiddenSingles.has(String(tid)));
 
+      const readTeamSize = (details)=>{
+        if (!details || typeof details !== 'object') return 1;
+        const explicit = Number(details.size);
+        if (Number.isFinite(explicit) && explicit > 0) return explicit;
+        const members = Array.isArray(details.members) ? details.members.filter(Boolean) : [];
+        if (members.length) return members.length;
+        return 1;
+      };
+
       let totalParticipants = 0;
       let totalUnits = 0;
       allTeamIds.forEach((tid)=>{
         const det = teamDetails[tid] || {};
-        totalParticipants += det.size || 1;
+        totalParticipants += readTeamSize(det);
         totalUnits += 1;
       });
       metrics.total_participant_count = totalParticipants;
@@ -160,12 +169,12 @@
         if (group.host_team_id){
           const hostId = String(group.host_team_id);
           const det = teamDetails[hostId] || {};
-          metrics.phase_summary[phase].assigned_participants += det.size || 1;
+          metrics.phase_summary[phase].assigned_participants += readTeamSize(det);
         }
         (group.guest_team_ids || []).forEach((tid)=>{
           const guestId = String(tid);
           const det = teamDetails[guestId] || {};
-          metrics.phase_summary[phase].assigned_participants += det.size || 1;
+          metrics.phase_summary[phase].assigned_participants += readTeamSize(det);
         });
       });
 
@@ -221,7 +230,7 @@
       let totalAssignedParticipants = 0;
       allPlacedSoloTeams.forEach((tid)=>{
         const det = teamDetails[tid] || {};
-        totalAssignedParticipants += det.size || 1;
+        totalAssignedParticipants += readTeamSize(det);
       });
       metrics.assigned_participant_count = totalAssignedParticipants;
 
@@ -469,9 +478,8 @@
             uncoveredLine.className = 'mt-1 text-[#b91c1c]';
             uncoveredLine.textContent = `Uncovered: ${uncovered.join(', ')}`;
             allergySummary.appendChild(uncoveredLine);
-            card.classList.remove('border-[#f0f4f7]');
-            card.classList.remove('bg-[#fcfcfd]');
-            card.classList.add('border-[#fecaca]', 'bg-[#fef2f2]');
+            // Note: do NOT mark the entire group card as red for allergy-only issues.
+            // Red highlighting is reserved for host_reuse warnings (handled below).
           } else if (guestUnion.length){
             const coveredLine = document.createElement('div');
             coveredLine.className = 'mt-1 text-[#16a34a]';
@@ -480,6 +488,14 @@
           }
           if (allergySummary.childNodes.length){
             card.appendChild(allergySummary);
+          }
+
+          // Highlight groups with host reuse issues (these should be shown in red).
+          const hasHostReuse = Array.isArray(group.warnings) && group.warnings.indexOf('host_reuse') !== -1;
+          if (hasHostReuse){
+            card.classList.remove('border-[#f0f4f7]');
+            card.classList.remove('bg-[#fcfcfd]');
+            card.classList.add('border-[#fecaca]', 'bg-[#fef2f2]');
           }
 
           wrap.appendChild(card);

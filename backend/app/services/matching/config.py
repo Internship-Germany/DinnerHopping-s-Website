@@ -48,7 +48,7 @@ def weight_defaults() -> Dict[str, float]:
         "dist": _float_env("MATCH_W_DIST", "0.5"),
         "pref": _float_env("MATCH_W_PREF", "2"),
         "allergy": _float_env("MATCH_W_ALLERGY", "2"),
-        "desired_host": _float_env("MATCH_W_DESIRED_HOST", "10"),
+        # 'desired_host' weight removed — formerly controlled by MATCH_W_DESIRED_HOST
         "trans": _float_env("MATCH_W_TRANS", "0"),
         "final_party": _float_env("MATCH_W_FINAL_PARTY", "0.3"),
         "phase_order": _float_env("MATCH_W_PHASE_ORDER", "1"),

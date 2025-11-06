@@ -10,7 +10,7 @@ from ... import db as db_mod
 from ...notifications import send_refund_processed
 from ...utils import ensure_chats_from_matches, ensure_general_chat_full, send_email
 
-from .config import meal_time_defaults
+from .config import meal_time_defaults, phases as configured_phases
 from .data import augment_emails_map_with_splits, get_event, team_emails_map, team_key
 
 
@@ -277,69 +277,74 @@ async def list_issues(event_id: str, version: Optional[int] = None) -> dict:
             'actors': {'registration_missing': actors_payload},
         })
 
-    unmatched_units_data = match_doc.get('unmatched_units') or []
-    team_phase_gaps: Dict[str, Dict[str, Any]] = {}
-    for entry in unmatched_units_data:
-        unit_id = entry.get('team_id')
-        if unit_id is None:
+    # Determine the phases each unit participates in (hosts or guests)
+    unit_phase_map: Dict[str, Set[str]] = {}
+
+    def _record_unit_phase(unit: Optional[object], phase_value: Optional[object]) -> None:
+        if unit is None or phase_value is None:
+            return
+        phase_key = str(phase_value).strip().lower()
+        if not phase_key:
+            return
+        unit_id_str = str(unit)
+        unit_phase_map.setdefault(unit_id_str, set()).add(phase_key)
+
+    for group in groups:
+        phase = group.get('phase')
+        _record_unit_phase(group.get('host_team_id'), phase)
+        for guest_id in group.get('guest_team_ids') or []:
+            _record_unit_phase(guest_id, phase)
+
+    # Track which synthetic units/emails cover each phase
+    email_units_map: Dict[str, Set[str]] = {}
+    email_phase_map: Dict[str, Set[str]] = {}
+    for unit_id, emails in augmented_email_map.items():
+        phases_for_unit = unit_phase_map.get(str(unit_id), set())
+        if not phases_for_unit:
             continue
-        unit_id_str = str(unit_id)
-        phases = sorted({str(p) for p in entry.get('phases') or [] if p})
-        if not phases:
-            continue
-        unit_emails_norm: Set[str] = set()
-        for email in augmented_email_map.get(unit_id_str, []):
-            recorded = _record_email(email, email_display_map)
-            if recorded:
-                unit_emails_norm.add(recorded)
-        if not unit_emails_norm and unit_id_str.startswith('split:'):
-            extracted = unit_id_str.split(':', 1)[1]
-            recorded = _record_email(extracted, email_display_map)
-            if recorded:
-                unit_emails_norm.add(recorded)
-        if not unit_emails_norm and unit_id_str.startswith('pair:'):
-            for part in unit_id_str.split(':', 1)[1].split('+'):
-                recorded = _record_email(part, email_display_map)
-                if recorded:
-                    unit_emails_norm.add(recorded)
-        candidate_team_ids: Set[str] = set()
-        for email in unit_emails_norm:
-            candidate_team_ids.update(email_to_team.get(email, set()))
-        if not candidate_team_ids and unit_id_str in reg_by_team:
-            candidate_team_ids.add(unit_id_str)
-        relevant_team_ids = [tid for tid in candidate_team_ids if tid in active_team_ids]
-        if not relevant_team_ids and unit_id_str in active_team_ids:
-            relevant_team_ids = [unit_id_str]
-        if not relevant_team_ids:
-            continue
-        display_emails = [email_display_map.get(email, email) for email in unit_emails_norm]
-        for team_id in relevant_team_ids:
-            if team_id in team_cancelled:
+        for email in emails:
+            normalized = _record_email(email, email_display_map)
+            if not normalized:
                 continue
-            info = team_phase_gaps.setdefault(team_id, {
-                'team_id': team_id,
-                'missing_phases': set(),
-                'missing_emails': set(),
-                'missing_units': set(),
-            })
-            info['missing_phases'].update(phases)
-            if display_emails:
-                info['missing_emails'].update(display_emails)
-            info['missing_units'].add(unit_id_str)
+            email_units_map.setdefault(normalized, set()).add(str(unit_id))
+            email_phase_map.setdefault(normalized, set()).update(phases_for_unit)
+
+    phase_list = [str(p).strip().lower() for p in configured_phases()]
+    if not phase_list:
+        phase_list = ['appetizer', 'main', 'dessert']
 
     phase_gap_actors: List[dict] = []
-    for team_id in sorted(team_phase_gaps):
-        info = team_phase_gaps[team_id]
-        missing_phases = sorted(info.get('missing_phases') or [])
+    for team_id in sorted(active_team_ids):
+        if team_id in team_cancelled:
+            continue
+        expected_emails = team_expected_emails.get(team_id, set())
+        phases_covered: Set[str] = set(unit_phase_map.get(team_id, set()))
+        for email in expected_emails:
+            phases_covered.update(email_phase_map.get(email, set()))
+        missing_phases = [phase for phase in phase_list if phase not in phases_covered]
         if not missing_phases:
             continue
-        actor = {'team_id': team_id, 'missing_phases': missing_phases}
-        missing_emails = sorted(info.get('missing_emails') or [])
+        actor: Dict[str, Any] = {'team_id': team_id, 'missing_phases': missing_phases}
+
+        missing_emails: List[str] = []
+        for email in expected_emails:
+            phases_for_email = email_phase_map.get(email, set())
+            if any(phase not in phases_for_email for phase in missing_phases):
+                missing_emails.append(email_display_map.get(email, email))
         if missing_emails:
-            actor['missing_emails'] = missing_emails
-        missing_units = sorted(info.get('missing_units') or [])
-        if missing_units:
-            actor['missing_unit_ids'] = missing_units
+            actor['missing_emails'] = sorted(set(missing_emails))
+
+        related_units: Set[str] = {team_id}
+        for email in expected_emails:
+            related_units.update(email_units_map.get(email, set()))
+
+        missing_unit_ids = sorted({
+            unit_id for unit_id in related_units
+            if any(phase not in unit_phase_map.get(unit_id, set()) for phase in missing_phases)
+        })
+        if missing_unit_ids:
+            actor['missing_unit_ids'] = missing_unit_ids
+
         phase_gap_actors.append(actor)
 
     if phase_gap_actors:

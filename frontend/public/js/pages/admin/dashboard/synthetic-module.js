@@ -202,7 +202,24 @@
 
     function isSyntheticId(teamId){
       if (!teamId) return false;
-      return String(teamId).startsWith('pair:') || String(teamId).startsWith('split:');
+      const strId = String(teamId);
+      if (strId.startsWith('pair:') || strId.startsWith('split:')) return true;
+
+      if (!teamDetails || typeof teamDetails !== 'object') return false;
+      const details = teamDetails[strId] || teamDetails[teamId];
+      if (!details || typeof details !== 'object') return false;
+
+      if (details.synthetic_kind || details.synthetic_parent) return true;
+      const originType = details.origin && details.origin.type;
+      if (originType && String(originType).toLowerCase().startsWith('synthetic')) return true;
+
+      const members = Array.isArray(details.members) ? details.members.filter(Boolean) : [];
+      if (members.length <= 1) return true;
+
+      const declaredSize = Number(details.size);
+      if (!members.length && Number.isFinite(declaredSize) && declaredSize <= 1) return true;
+
+      return false;
     }
 
     function sanitizeForSyntheticId(value){

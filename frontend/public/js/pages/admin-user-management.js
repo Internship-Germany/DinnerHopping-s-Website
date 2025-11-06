@@ -883,7 +883,7 @@
         if (processBtn) processBtn.classList.toggle('hidden', !hasItems);
         if (overview) {
           if (!hasItems) {
-            overview.innerHTML = '<div class="text-sm">No refunds due.</div>';
+            overview.innerHTML = '<div class="text-sm">Refunds are enabled for this event. No cancellations require a refund.</div>';
           } else {
             const rows = data.items.map((item) => `
               <tr data-reg="${escapeHtml(item.registration_id)}">
@@ -909,7 +909,7 @@
               </div>`;
           }
         }
-        if (msg) msg.textContent = hasItems ? '' : 'No pending refunds.';
+  if (msg) msg.textContent = hasItems ? '' : 'Refunds are enabled. No pending refunds.';
       } catch (error) {
         console.error('Error loading refunds:', error);
         resetOverview('Failed to load refunds.');

@@ -1024,8 +1024,16 @@ async def list_refunds(event_id: str):
     ev = await db_mod.db.events.find_one({'_id': ev_id})
     if not ev:
         raise HTTPException(status_code=404, detail='Event not found')
-    if not ev.get('refund_on_cancellation'):
-        return {"event_id": event_id, "currency": (ev.get('currency') or 'EUR'), "items": [], "total_cents": 0}
+    enabled = bool(ev.get('refund_on_cancellation'))
+    if not enabled:
+        return {
+            "event_id": event_id,
+            "currency": (ev.get('currency') or 'EUR'),
+            "items": [],
+            "total_cents": 0,
+            "total_refund_cents": 0,
+            "enabled": False,
+        }
     await require_event_published(ev_id)
     fee_cents = int(ev.get('fee_cents') or 0)
     items = []
@@ -1055,7 +1063,14 @@ async def list_refunds(event_id: str):
             'payment_status': pay.get('status') if pay else None,
         })
         total += amount
-    return {"event_id": event_id, "currency": (ev.get('currency') or 'EUR'), "items": items, "total_cents": total}
+    return {
+        "event_id": event_id,
+        "currency": (ev.get('currency') or 'EUR'),
+        "items": items,
+        "total_cents": total,
+        "total_refund_cents": total,
+        "enabled": True,
+    }
 
 
 @router.post('/webhooks/paypal')

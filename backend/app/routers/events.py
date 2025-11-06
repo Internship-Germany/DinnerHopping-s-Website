@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Literal, List
+from typing import Optional, Literal, List, Dict
 from datetime import timezone, timedelta
 from app import db as db_mod
 from app.auth import get_current_user, require_admin
@@ -31,6 +31,7 @@ import os
 
 _ALLOWED_STATUSES = {'draft','coming_soon','open','closed','matched','released','cancelled'}
 _LEGACY_MAP = { 'published': 'open' }
+_EXCLUDED_REG_STATUSES = {'cancelled_by_user', 'cancelled_admin', 'refunded', 'expired'}
 
 def _normalize_status(v: Optional[str]) -> str:
     if not v:
@@ -39,6 +40,62 @@ def _normalize_status(v: Optional[str]) -> str:
     s = _LEGACY_MAP.get(s, s)
     return s if s in _ALLOWED_STATUSES else 'draft'
 router = APIRouter()
+
+
+async def _active_participant_counts(event_ids: List[ObjectId]) -> Dict[ObjectId, int]:
+    """Return active participant counts (excluding cancelled/refunded registrations) by event."""
+    if not event_ids:
+        return {}
+
+    pipeline = [
+        {
+            '$match': {
+                'event_id': {'$in': event_ids},
+                'status': {'$nin': list(_EXCLUDED_REG_STATUSES)},
+            }
+        },
+        {
+            '$addFields': {
+                'team_key': {
+                    '$cond': [
+                        {'$ifNull': ['$team_id', False]},
+                        {'$toString': '$team_id'},
+                        {'$concat': ['solo:', {'$toString': '$_id'}]},
+                    ]
+                },
+                'team_size_fallback': {
+                    '$cond': [
+                        {'$gt': [{'$ifNull': ['$team_size', 0]}, 0]},
+                        '$team_size',
+                        1,
+                    ]
+                },
+            }
+        },
+        {
+            '$group': {
+                '_id': {
+                    'event_id': '$event_id',
+                    'team_key': '$team_key',
+                },
+                'team_size': {'$max': '$team_size_fallback'},
+            }
+        },
+        {
+            '$group': {
+                '_id': '$_id.event_id',
+                'participant_count': {'$sum': '$team_size'},
+            }
+        },
+    ]
+
+    counts: Dict[ObjectId, int] = {}
+    async for row in db_mod.db.registrations.aggregate(pipeline):
+        event_id = row.get('_id')
+        if event_id is None:
+            continue
+        counts[event_id] = int(row.get('participant_count') or 0)
+    return counts
 
 ######### Date/Datetime Helpers #########
 
@@ -352,24 +409,28 @@ async def list_events(date: Optional[str] = None, status: Optional[str] = None, 
     if not is_admin and not status:
         query['status'] = {'$in': ['coming_soon','open','matched','released']}
 
-    events_resp = []
+    event_docs = []
     async for e in db_mod.db.events.find(query):
         if not is_admin:
             valid_zips = e.get('valid_zip_codes') or []
             user_zip = (current_user.get('postal_code') or '').strip()
             if valid_zips and user_zip and user_zip not in valid_zips:
                 continue
+        event_docs.append(e)
+
+    active_counts = await _active_participant_counts([doc.get('_id') for doc in event_docs if doc.get('_id') is not None])
+
+    events_resp = []
+    for e in event_docs:
         date_val = _fmt_date(e.get('date')) or ''
         start_val = _fmt_date(e.get('start_at'))
         registration_deadline_val = _fmt_date(e.get('registration_deadline'))
         payment_deadline_val = _fmt_date(e.get('payment_deadline'))
-
-        # Normalize after_party_location using the safe helper when building the response
-        # (previous call to `_normalize_location_for_output` was undefined and unused)
-        # raw_loc = e.get('after_party_location') or e.get('location')
+        event_id = e.get('_id')
+        active_participants = active_counts.get(event_id, e.get('attendee_count', 0) or 0)
 
         events_resp.append(EventOut(
-            id=str(e.get('_id')),
+            id=str(event_id),
             title=e.get('title') or e.get('name') or 'Untitled',
             description=e.get('description'),
             extra_info=e.get('extra_info'),
@@ -380,7 +441,7 @@ async def list_events(date: Optional[str] = None, status: Optional[str] = None, 
             capacity=e.get('capacity'),
             fee_cents=e.get('fee_cents', 0),
             city=e.get('city'),
-            attendee_count=e.get('attendee_count', 0),
+            attendee_count=active_participants,
             status=_normalize_status(e.get('status')),
             organizer_id=str(e.get('organizer_id')) if e.get('organizer_id') is not None else None,
             created_by=str(e.get('created_by')) if e.get('created_by') is not None else None,
@@ -538,6 +599,9 @@ async def get_event(event_id: str, anonymise: bool = True, current_user=Depends(
     serialized['id'] = str(e.get('_id'))
     # ensure fee_cents is always present (default 0)
     serialized['fee_cents'] = e.get('fee_cents', 0)
+    # overwrite attendee_count with fresh active registrations tally
+    active_counts = await _active_participant_counts([event_oid])
+    serialized['attendee_count'] = active_counts.get(event_oid, e.get('attendee_count', 0) or 0)
     # anonymise after_party_location info (fallback to legacy 'location')
     loc = None
     if isinstance(e.get('after_party_location'), dict):

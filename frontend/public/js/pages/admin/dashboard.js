@@ -33,6 +33,10 @@
   let unsaved = false;
   const teamNamesCache = {};
 
+  // Track async validation/preview calls so outdated responses do not rollback UI changes
+  let previewRequestSeq = 0;
+  let validateRequestSeq = 0;
+
   function markUnsaved(){
     unsaved = true;
   }
@@ -1212,17 +1216,22 @@
     if (!evId || !detailsGroups || !detailsGroups.length) return;
     // Call preview (fast travel estimation) to refresh score/travel/warnings
     try {
+      const requestSeq = ++previewRequestSeq;
       const res = await apiFetch(`/matching/${evId}/preview`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groups: detailsGroups }) });
+      if (requestSeq !== previewRequestSeq) return;
       if (!res.ok) return;
     const data = await res.json().catch(()=>null);
-    if (!data || !Array.isArray(data.groups)) return;
-    detailsGroups = data.groups;
-  updateSyntheticState({ teamDetails, detailsGroups, detailsVersion });
+      if (requestSeq !== previewRequestSeq) return;
+      if (!data || !Array.isArray(data.groups)) return;
+      detailsGroups = data.groups;
+      updateSyntheticState({ teamDetails, detailsGroups, detailsVersion });
       if (data.metrics && typeof data.metrics === 'object'){
         detailsMetrics = data.metrics;
       }
       renderMatchDetailsBoard();
-    } catch (e) {}
+    } catch (e) {
+      // No-op: failures should not rollback more recent UI placements
+    }
   }
 
   function bindDnD(){
@@ -1437,8 +1446,11 @@
 
   async function validateCurrentGroups(){
     const evId = $('#matching-event-select').value;
+    const requestSeq = ++validateRequestSeq;
     const res = await apiFetch(`/matching/${evId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groups: detailsGroups }) });
+    if (requestSeq !== validateRequestSeq) return;
     const data = await res.json().catch(()=>({ violations:[], phase_issues:[], group_issues:[] }));
+    if (requestSeq !== validateRequestSeq) return;
     const issues = [];
     (data.violations||[]).forEach(v=>{
       const names = (v.pair||[]).map(id=> getTeamLabel(id, detailsVersion));
@@ -1718,7 +1730,6 @@
       dist: 1,
       pref: 5,
       allergy: 3,
-      desired_host: 10,
       trans: 0.5,
       final_party: 0.5,
       phase_order: 0,
@@ -1735,7 +1746,6 @@
       dist: get('w-dist', 'dist'),
       pref: get('w-pref', 'pref'),
       allergy: get('w-allergy', 'allergy'),
-      desired_host: get('w-desired-host', 'desired_host'),
       trans: get('w-trans', 'trans'),
       final_party: get('w-final-party', 'final_party'),
       phase_order: get('w-phase-order', 'phase_order'),
